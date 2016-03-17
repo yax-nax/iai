@@ -111,6 +111,42 @@ var readyUser = [];
 // ゲームステータス
 var status = '';
 
+// システム
+var system = {
+		
+		// プレイヤーステータス
+		playerStatus : '',
+		
+		// ゲームステータス
+		gameStatus   : '',
+};
+
+// スレイヤーステータス定義
+// プレイヤーが0の場合
+var STS_NO_PLAYER = 'no player';
+
+// プレイヤーが1人の場合
+var STS_ONE_PLAYER = 'one player';
+
+// プレイヤーが2人以上の場合
+var STS_MANY_PLAYER = 'many player';
+
+// ゲームステータス定義
+// 開始待ち
+var STS_GAME_WAIT = 'game wait';
+
+// 開始可能
+var STS_GAME_STARTABLE = 'game startable';
+
+// 戦闘可能待ち
+var STS_FIGHT_WAIT = 'game fight wait';
+
+// 戦闘可能
+var STS_GAME_FIGHT = 'game fight';
+
+// 終了
+var STS_GAME_END = 'game end';
+
 // スラッシュユーザ
 var slashUser = '';
 
@@ -127,6 +163,10 @@ var game = {
 	userStroe : {},
 }
 
+
+// 初期処理
+system.playerStatus = STS_NO_PLAYER;
+
 /**
  * ユーザが接続したとき
  */
@@ -136,6 +176,11 @@ function onIoConnection(socket){
 	
 	// ユーザデータ作成
 	createUserObj(socket.id);
+	
+	// 接続プレイヤー数を取得
+	var connectPlayerNum = getConnectPlayerNum();
+	
+	console.log('[' + connectPlayerNum + '] Players Connectting');
 	
 	/**
 	 * ユーザが接続したとき
@@ -233,7 +278,9 @@ function isAllUserReady(store){
  * ユーザが参加したとき
  */
 function userJoin(msg){
-	console.log(msg);
+	//console.log(msg);
+	
+	console.log(msg.name + ' is join');
 	
 	usrobj =
 	{
@@ -255,13 +302,22 @@ function userJoin(msg){
  */
 function userReady(socketId){
 	
-	console.log(socketId + 'is Ready');
+	console.log(socketId + ' is Ready');
+	
+	var msg = {
+			readyUserName : '',
+			userStore     : null
+	}
 	
 	// 準備完了状態に変更
 	userStore['/#' + socketId].ready = true;
 
+	// メッセージ作成
+	msg.readyUserName = userStore['/#' + socketId].userName;
+	msg.userStore = userStore;
+	
 	// 準備完了を通知
-	io.emit('ready user', userStore);
+	io.emit('ready user', msg);
 
 	// 全ユーザが準備完了になっているかチェック
 	if(isAllUserReady(userStore)){
@@ -274,12 +330,21 @@ function userReady(socketId){
  */
 function userWait(socketId){
 	
-	console.log(socketId + 'is Wait');
+	console.log(socketId + ' is Waiting');
+	
+	var msg = {
+			readyUserName : '',
+			userStore     : null
+	}
 	
 	// 待機状態に変更
 	userStore['/#' + socketId].ready = false;
 	
-	io.emit('wait user', userStore);
+	// メッセージ作成
+	msg.readyUserName = userStore['/#' + socketId].userName;
+	msg.userStore = userStore;
+	
+	io.emit('wait user', msg);
 }
 
 /**
@@ -301,6 +366,8 @@ function allUserReady(obj){
 function gameStart(){
 	
 	console.log('Game Start');
+	
+	status = 'game start';
 	
 	// 決闘通知
 	io.emit('enter field', '');
@@ -422,4 +489,43 @@ function getRondomTimer(){
 	
 	var rand = (Math.floor( Math.random() * 30 ) * 100) + 3000;
 	return rand;
+}
+
+/**
+ * 接続されたプレイヤー数をカウントする
+ */
+function getConnectPlayerNum(){
+	return Object.keys(userStore).length;
+}
+
+/**
+ * 参加中のプレイヤー数をカウントする
+ */
+function getJoinPlayerNum(){
+	
+	var num = 0;
+	
+	for(key in userStore){
+		if(userStore[key].name !== ''){
+			num++;
+		}
+	}
+	
+	return num;
+}
+
+/**
+ * 準備完了状態のプレイヤー数をカウントする
+ */
+function ReadyPlayerNum(){
+	
+	var num = 0;
+	
+	for(key in userStore){
+		if(userStore[key].name !== '' && userStore[key].ready){
+			num++;
+		}
+	}
+	
+	return num;
 }

@@ -22,6 +22,9 @@ socket.on('iai connect', function(msg){
 	var joinUserStr = getJoinUserHtml(msg, socket.id);
 
 	$('#join-user').html('<span>' + joinUserStr + '</span>');
+
+	printInfoLog('プレイヤー名を入力し、参加ボタンを押して試合に参加してください。');
+
 });
 
 /**
@@ -41,6 +44,8 @@ socket.on('user disconnect', function(msg){
 	// ゲーム開始ボタン状態更新
 	startGameButtonActive(msg.world.allUserReady);
 
+	printInfoLog('プレイヤーが離脱しました。');
+
 });
 
 /**
@@ -52,6 +57,9 @@ socket.on('join user', function(msg){
 	// 参加ユーザの取得
 	var joinUserStr = getJoinUserHtml(msg, socket.id);
 	$('#join-user').html('<span>' + joinUserStr + '</span>');
+
+	printInfoLog('プレイヤーが参加しました。');
+
 });
 
 /**
@@ -61,8 +69,11 @@ socket.on('ready user', function(msg){
 	console.log('Ready User Update');
 
 	// 準備完了ユーザの取得
-	var readyUserStr = getReadyUserHtml(msg);
+	var readyUserStr = getReadyUserHtml(msg.userStore);
 	$('#ready-user-name').html('<span>' + readyUserStr + '</span>');
+
+	printInfoLog('[ ' + msg.readyUserName + ' ]は準備完了です。');
+
 });
 
 /**
@@ -71,12 +82,14 @@ socket.on('ready user', function(msg){
 socket.on('wait user', function(msg){
 	console.log('Wait User Update');
 
-	var readyUserStr = getReadyUserHtml(msg);
+	var readyUserStr = getReadyUserHtml(msg.userStore);
 
 	$('#ready-user-name').html('<span>' + readyUserStr + '</span>');
 
 	// ゲーム開ボタンを非表示
 	startGameButtonActive(false);
+
+	printInfoLog('[ ' + msg.readyUserName + ' ]は待機中です。');
 
 });
 
@@ -85,6 +98,8 @@ socket.on('wait user', function(msg){
  */
 socket.on('all user ready', function(msg){
 	console.log('All User ready');
+
+	printInfoLog('ゲームを開始できます。');
 
 	// ゲーム開始ボタンを表示
 	startGameButtonActive(true);
@@ -155,7 +170,7 @@ socket.on('back to ready', function(msg){
 	// ステータスを準備中に戻す
 	status = GAME_WAIT;
 
-	retryInit();
+	retryInit(true);
 
 });
 
@@ -227,6 +242,18 @@ function join(){
 	msg.roomid = document.getElementById('room-id').value;
 	msg.socketId = socket.id;
 
+	// 未入力チェック
+	if(msg.name === ''){
+
+		// 準備完了ボタンの非表示
+		showPlayerNameEmptyMessage(true);
+		return false;
+
+	}else{
+		// 準備完了ボタンの非表示
+		showPlayerNameEmptyMessage(false);
+	}
+
 	// 自分のユーザ名
 	userName = msg.name;
 
@@ -238,6 +265,12 @@ function join(){
 
 	// ユーザ名の入力フィールドを非表示にする
 	userNameFieldActive(false);
+
+	// 準備完了ボタンの非表示
+	readyButtonActive(true);
+
+	// 待機ボタンの非表示
+	// waitButtonActive(true);
 
 	// ステータスを待機中に設定
 	status = GAME_WAIT;
@@ -258,6 +291,12 @@ function ready(){
 	// ステータスを準備完了に設定
 	status = GAME_READY;
 
+	// 準備完了ボタンの非表示
+	readyButtonActive(false);
+
+	// 待機ボタンの表示
+	waitButtonActive(true);
+
 	socket.emit('ready', socket.id);
 }
 
@@ -273,6 +312,12 @@ function wait(){
 
 	// ステータスを準備完了に設定
 	status = GAME_WAIT;
+
+	// 準備完了ボタンの表示
+	readyButtonActive(true);
+
+	// 待機ボタンの非表示表示
+	waitButtonActive(false);
 
 	socket.emit('wait', socket.id);
 }
@@ -309,6 +354,31 @@ function showFixUserName(flag){
 	}else{
 		$('#fix-user-name-text').hide();
 	}
+}
+
+/**
+ * インフォメーションメッセージの更新
+ * @param msg
+ */
+function updateInfoMessage(msg){
+
+	$('#info-message').text('');
+	$('#info-message').text(msg);
+
+}
+
+/**
+ * インフォメーションログを出力
+ * @param msg
+ */
+function printInfoLog(msg){
+
+	var infoLog = $('#info-log');
+
+	infoLog.append('<div>' + msg + '</div>');
+
+	if(infoLog.length == 0) return;
+	infoLog.scrollTop(infoLog[0].scrollHeight);
 
 }
 
@@ -335,6 +405,45 @@ function startGameButtonActive(flag){
 		$('#btn-start-game').show();
 	}else{
 		$('#btn-start-game').hide();
+	}
+}
+
+/**
+ * プレイヤー名未入力警告文の表示切替
+ * @param flag
+ */
+function showPlayerNameEmptyMessage(flag){
+
+	if(flag){
+		$('#user-name-empty-message').show();
+	}else{
+		$('#user-name-empty-message').hide();
+	}
+}
+
+/**
+ * 準備完了ボタンの表示切替
+ * @param flag
+ */
+function readyButtonActive(flag){
+
+	if(flag){
+		$('#btn-ready').show();
+	}else{
+		$('#btn-ready').hide();
+	}
+}
+
+/**
+ * 待機ボタンの表示切替
+ * @param flag
+ */
+function waitButtonActive(flag){
+
+	if(flag){
+		$('#btn-wait').show();
+	}else{
+		$('#btn-wait').hide();
 	}
 }
 
@@ -400,17 +509,26 @@ function init(){
 	showFixUserName(false);
 
 	// リトライ用初期化
-	retryInit();
+	retryInit(false);
 
 }
 
 /**
  * リトライ用初期化
  */
-function retryInit(){
+function retryInit(retryFlag){
+
+	// 未入力警告文非表示
+	showPlayerNameEmptyMessage(false);
 
 	// ゲーム開始ボタンの非表示
 	startGameButtonActive(false);
+
+	// 準備完了ボタンの非表示
+	readyButtonActive(retryFlag);
+
+	// 待機ボタンの非表示
+	waitButtonActive(false);
 
 	// スラッシュボタンの非表示
 	slashButtonActive(false);

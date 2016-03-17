@@ -6,3 +6,14 @@ body {
 a {
   color: #00B7FF;
 }
+
+
+#user-name-empty-message{
+	color:#f99;
+}
+
+#info-log{
+	border:1px solid #ccc;
+	height:100px;
+	overflow-y:scroll;
+}

@@ -7,12 +7,17 @@ block content
   //input(type='text' id='chat-message')
   //button(onclick='sendMessage()')
   //  送る
+  span(id='user-name-empty-message')※プレイヤー名を入力してください。
+  span(id="info-message")
+  div(id='info-log')
   div(id="user-name-field")
-    input(type='text' id='user-name' placeholder='ユーザ名を入力して参加')
+    span プレイヤー名：
+      input(type='text' id='user-name' placeholder='ユーザ名を入力して参加')
     button(onclick='join()')
       参加
   input(type='hidden' id='room-id' placeholder='ルームID')
 
+  br
   label 参加中のほかのユーザ：
     span(id='join-user')
     
