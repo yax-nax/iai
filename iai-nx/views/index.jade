@@ -1,0 +1,39 @@
+extends layout
+
+block content
+  // h1= title
+  p(id="fix-user-name-text") こんにちわ &nbsp;
+    span(id='fix-user-name')
+  //input(type='text' id='chat-message')
+  //button(onclick='sendMessage()')
+  //  送る
+  div(id="user-name-field")
+    input(type='text' id='user-name' placeholder='ユーザ名を入力して参加')
+    button(onclick='join()')
+      参加
+  input(type='hidden' id='room-id' placeholder='ルームID')
+
+  label 参加中のほかのユーザ：
+    span(id='join-user')
+    
+  br
+  p 準備完了のユーザ：
+    span(id='ready-user-name')
+  
+  button(id='btn-ready' onclick='ready()') 準備完了
+  button(id='btn-wait' onclick='wait()') 準備中
+  
+  br
+  button(id='btn-start-game' onclick='startGame()') ゲーム開始
+  
+  br
+  button(id='btn-slash' onclick='slash()') 斬る
+  
+  br
+  h2(id='fight-message') 斬れ！！
+  
+  br
+  h2(id='winner-name')
+    
+  br
+  button(id='btn-retry' onclick='retry()') 再戦する

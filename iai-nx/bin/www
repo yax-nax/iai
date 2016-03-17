@@ -1,0 +1,425 @@
+#!/usr/bin/env node
+
+/**
+ * Module dependencies.
+ */
+
+var app = require('../app');
+var debug = require('debug')('Iai:server');
+var http = require('http');
+
+/**
+ * Get port from environment and store in Express.
+ */
+
+var port = normalizePort(process.env.PORT || '3000');
+app.set('port', port);
+
+/**
+ * Create HTTP server.
+ */
+var server = http.createServer(app);
+
+/**
+ * Socket IO
+ */
+var io = require('socket.io')(server);
+
+/**
+ * Listen on provided port, on all network interfaces.
+ */
+server.listen(port);
+server.on('error', onError);
+server.on('listening', onListening);
+
+/**
+ * IOのハンドラ
+ */
+io.on('connection', onIoConnection);
+
+console.log('SERVER RUNNING ON 3000');
+
+/**
+ * Normalize a port into a number, string, or false.
+ */
+
+function normalizePort(val) {
+  var port = parseInt(val, 10);
+
+  if (isNaN(port)) {
+    // named pipe
+    return val;
+  }
+
+  if (port >= 0) {
+    // port number
+    return port;
+  }
+
+  return false;
+}
+
+/**
+ * Event listener for HTTP server "error" event.
+ */
+
+function onError(error) {
+  if (error.syscall !== 'listen') {
+    throw error;
+  }
+
+  var bind = typeof port === 'string'
+    ? 'Pipe ' + port
+    : 'Port ' + port;
+
+  // handle specific listen errors with friendly messages
+  switch (error.code) {
+    case 'EACCES':
+      console.error(bind + ' requires elevated privileges');
+      process.exit(1);
+      break;
+    case 'EADDRINUSE':
+      console.error(bind + ' is already in use');
+      process.exit(1);
+      break;
+    default:
+      throw error;
+  }
+}
+
+/**
+ * Event listener for HTTP server "listening" event.
+ */
+
+function onListening() {
+  var addr = server.address();
+  var bind = typeof addr === 'string'
+    ? 'pipe ' + addr
+    : 'port ' + addr.port;
+  debug('Listening on ' + bind);
+}
+
+// データストア
+var store = {};
+
+// ユーザストア
+var userStore = {};
+
+// 準備完了
+var readyUser = [];
+
+// ゲームステータス
+var status = '';
+
+// スラッシュユーザ
+var slashUser = '';
+
+// 戦闘結果
+var fightResult = {
+		winner : '',
+		looser : [],
+};
+
+var game = {
+	world     :{
+		allUserReady : false
+	},
+	userStroe : {},
+}
+
+/**
+ * ユーザが接続したとき
+ */
+function onIoConnection(socket){
+	
+	console.log('User Connect [Socket ID=' + socket.id + ']');
+	
+	// ユーザデータ作成
+	createUserObj(socket.id);
+	
+	/**
+	 * ユーザが接続したとき
+	 */
+	// io.emit('iai connect', store);
+	io.emit('iai connect', userStore);
+	
+	/**
+	 * ユーザが参加したとき
+	 */
+	socket.on('join', userJoin);
+
+	/**
+	 * ユーザが準備完了にしたとき
+	 */
+	socket.on('ready', userReady);
+
+	/**
+	 * ユーザが待機状態に戻したとき
+	 */
+	socket.on('wait', userWait);
+	
+	/**
+	 * ゲーム開始したとき
+	 */
+	socket.on('game start', gameStart);
+	
+	/**
+	 * スラッシュしたとき
+	 */
+	socket.on('slash', slash);
+	
+	/**
+	 * 再戦したとき
+	 */
+	socket.on('retry', retryGame);
+	
+	/**
+	 * ユーザが接続を解除したとき
+	 */
+	socket.on('disconnect', function() {
+		
+		console.log('User Disconnect [Socket ID=' + socket.id + ']');
+		
+		// 切断したユーザをストアからさ駆除
+		removeUserObj(socket.id);
+		
+		// 全員が準備完了状態であるかチェック
+		if(isAllUserReady(store)){
+			game.world.allUserRedy = true;
+		}else{
+			game.world.allUserRedy = false;
+		}
+		
+		// オブジェクト設定
+		game.userStore = userStore;
+		
+		// 通知
+		io.emit('user disconnect', game);
+		
+	});
+}
+
+/**
+ * 全ユーザが準備状態であるか
+ */
+function isAllUserReady(store){
+	
+	// 全ユーザ数
+	var allUserNum = Object.keys(store).length;
+	
+	// 参加者が1人の場合は無効
+	if(allUserNum == 1){
+		return false
+	}
+	
+	var readyUserNum = 0;
+	
+	// 全ユーザの準備完了フラグがたっているかチェック
+	for(key in store){
+		if(store[key].ready){
+			readyUserNum++;
+		}
+	}
+	
+	// 全ユーザ数と準備完了ユーザ数が一致した場合、全ユーザ準備完了を通知
+	if(allUserNum === readyUserNum){
+		return true;
+	}
+	
+	return false;
+}
+
+/**
+ * ユーザが参加したとき
+ */
+function userJoin(msg){
+	console.log(msg);
+	
+	usrobj =
+	{
+		'room'     : msg.roomid,
+		'name'     : msg.name
+	};
+	
+	store[msg.name] = usrobj;
+	
+	// ユーザ名設定
+	userStore['/#' + msg.socketId].userName = msg.name;
+	
+	//io.emit('join user', store);
+	io.emit('join user', userStore);
+}
+
+/**
+ * 準備完了にしたとき
+ */
+function userReady(socketId){
+	
+	console.log(socketId + 'is Ready');
+	
+	// 準備完了状態に変更
+	userStore['/#' + socketId].ready = true;
+
+	// 準備完了を通知
+	io.emit('ready user', userStore);
+
+	// 全ユーザが準備完了になっているかチェック
+	if(isAllUserReady(userStore)){
+		allUserReady(null);
+	}
+}
+
+/**
+ * 待機状態にしたとき
+ */
+function userWait(socketId){
+	
+	console.log(socketId + 'is Wait');
+	
+	// 待機状態に変更
+	userStore['/#' + socketId].ready = false;
+	
+	io.emit('wait user', userStore);
+}
+
+/**
+ * 全ユーザが準備完了になった場合
+ */
+function allUserReady(obj){
+	
+	console.log('All User Ready');
+	
+	var msg = {};
+	
+	io.emit('all user ready', msg);
+	
+}
+
+/**
+ * ゲーム開始
+ */
+function gameStart(){
+	
+	console.log('Game Start');
+	
+	// 決闘通知
+	io.emit('enter field', '');
+	
+	// タイマー生成
+	var timer = getRondomTimer();
+	
+	console.log('Timer = ' + timer);
+	
+	// タイマー実行
+	setTimeout(function(){
+	
+		console.log('Fight');
+		
+		// 決闘ステータスにする
+		status = 'fight';
+		
+		// 決闘開始を通知
+		io.emit('fight', '');
+		
+	}, timer);
+}
+
+/**
+ * 斬る
+ */
+function slash(socketId){
+	
+	console.log('Slash [' + socketId + ']')
+	
+	// 決闘状態であるか
+	if(status === 'fight'){
+		
+		// 敗者に王録されている場合、無効
+		if(fightResult.looser.indexOf(socketId) >= 0){
+			
+			return false;
+		}
+		
+		// 勝者がいない場合、最もスラッシュが速かった者として、勝者に登録
+		if(fightResult.winner === ''){
+			
+			// 勝利回数をインクリメント
+			userStore['/#' + socketId].result.win++;
+			
+			// 勝者名を設定
+			fightResult.winner = userStore['/#' + socketId].userName;
+			io.emit('fight end', fightResult);
+		}
+		
+	}else{
+		
+		// 決闘状態でないのに巣ラッシュした場合、敗者配列に登録
+		fightResult.looser.push(socketId);
+		
+		// 敗者の通知
+		io.emit('fight continue', fightResult);
+	}
+}
+
+/**
+ * ゲームをリトライする
+ */
+function retryGame(){
+	
+	console.log('Retry');
+	
+	// 準備ユーザの初期化
+	readyUser = [];
+	
+	for(key in userStore){
+		userStore[key].ready = false;
+	}
+	
+	// ステータスの初期化
+	status = '';
+	
+	// 決闘結果の初期化
+	fightResult.looser = [];
+	fightResult.winner = '';
+	
+	// 再戦の通知
+	io.emit('back to ready', '');
+}
+
+/**
+ * ユーザデータを作成
+ */
+function createUserObj(socketId){
+	
+	var userData = {
+			socketId : socketId,
+			userName : '',
+			ready    : false,
+			result   : {
+				win   : 0,
+				loose : 0,
+			}
+	};
+	
+	userStore[socketId] = userData;
+
+}
+
+/**
+ * ユーザデータの削除
+ */
+function removeUserObj(socketId){
+	
+	// 切断したユーザ情報を削除
+	delete userStore[socketId];
+	
+}
+
+/**
+ * ランダムな秒数を取得する
+ */
+function getRondomTimer(){
+	
+	var rand = (Math.floor( Math.random() * 30 ) * 100) + 3000;
+	return rand;
+}
